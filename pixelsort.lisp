@@ -7,8 +7,6 @@
 
 
 
-(defun sorting-algo (pixels)
-    (sort pixels))
 
 ;;; Functional approach
 (defun calc-line-path (width height &key horizontal)
@@ -52,7 +50,7 @@
   ((criteria-fun :initarg :criteria :accessor criteria-fun)))
 
 ;; Should simply apply limit-selector :around threshold-selector
-(defclass limited-threshold-selector (threshold-selector limit-selector) ;; This is important, because only threshold-selector is called on-next-method
+(defclass limited-threshold-selector (threshold-selector limit-selector) ;; the order is important, because on-next-method should only call threshold-selector
   ())
 
 ;; Generics 
@@ -68,7 +66,14 @@
 	    (progn (push current-span spans)
 		   (setq current-span (list px))))))))
 
-(defmethod select-spans :around ((selector limit-selector))
+(defmethod select-spans ((selector span-selector) pixels path)
+  (list path
+	(loop for (x . y) in path
+	      collect (aref pixels x y))))
+
+(defmethod select-spans ((selector limit-selector) pixels path))
+
+(defmethod select-spans :around ((selector limit-selector) pixels path)
   (let ((spans (call-next-method))
 	(len 3))
     (loop for i from (length spans) downto 0 by len
@@ -103,29 +108,52 @@
 ;;;;;;;;;;;;;;; ;;
 ;; SORTING-ALGO ;;
 
+(defclass sorting-algo () ((criteria :initarg :sort-by)))
+(defgeneric sort-pixel-span (sorting-algo image coords values)
+  (:DOCUMENTATION "Sorts the values and puts then back at their coordinates into the provided image. There must be a better way, please"))
+(defmethod sort-pixel-span :around ((algo sorting-algo) image coords values)
+  (let ((sorted-values (call-next-method)))
+    (dotimes (i (length coords))
+      (let ((val (nth i sorted-values)))
+	(destructuring-bind (x . y) (nth i coords)
+	  (setf (aref image x y) val))))))
+
+(defmethod sort-pixel-span ((algo sorting-algo) image coord values)
+  (sort values (lambda (a b) (< a b))))
+
+
+
 ;; TODO
 
+(defun image-from-pixel-list (width height pixels)
+  (print pixels))
 
 (defun pixelsort (image path-generator span-selector sorting-algo)
-  (let ((w (image-width image))
-	(h (image-height image))
-	(pixels (image-pixels image)))
-    (imago:make-rgb-image-from-pixels
-      (mapcar identity
-	      (mapcar (lambda (path)
-			(select-spans span-selector pixels path)) ; Returns multiple lists of pixels
-		      (mapcar (generate-path path-generator w h))))))) ; returns lists of indices
-
+  (let* ((w (image-width image))
+	 (h (image-height image))
+	 (pixels (image-pixels image))
+	 (paths (generate-path path-generator w h))
+	 (new-image (imago:make-rgb-image w h)))
+    (mapcar (lambda (s) (sort-pixel-span sorting-algo (image-pixels new-image) (first s) (second s) ))
+	    (mapcar (lambda (path) (select-spans span-selector pixels path)) ; Returns multiple lists of pixels
+		    paths))
+    new-image)) ; returns lists of indices
 
 
 ;;; Main code ;;;
 
 
-(defparameter *image* (read-image "barbican-london-1.jpg"))
+(defparameter *image* (read-image "pixeltest.png"))
 
-(let ((sorted (pixelsort *image* (make-instance 'line-path) )))
-  ())
+(let* ((sorted (pixelsort *image*
+			  (make-instance 'line-path)
+			  (make-instance 'span-selector)
+			  (make-instance 'sorting-algo :sort-by 'hue))))
+       ;(sorted-img (image-from-pixel-list (image-width *image*) (image-height *image*) sorted)))
+  (imago:write-image sorted "out.png"))
+  ; ())
 
+; (imago:write-image *image* "out.png")
 ; (let ((w (imago:image-height *image*)) 
 ;       (h (imago:image-width *image*)))
 ;   (format t "~ax~a" w h))
