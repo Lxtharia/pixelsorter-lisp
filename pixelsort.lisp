@@ -99,11 +99,9 @@
   (print "Cutting the result of next-method:")
   (subseq (call-next-method) 0 5))
 
-(test (make-instance 'threshold-selector ))
-
-(test (make-instance 'limit-selector))
-
-(test (make-instance 'limited-threshold-selector ))
+; (test (make-instance 'threshold-selector ))
+; (test (make-instance 'limit-selector))
+; (test (make-instance 'limited-threshold-selector ))
 
 ;;;;;;;;;;;;;;; ;;
 ;; SORTING-ALGO ;;
@@ -125,9 +123,6 @@
 
 ;; TODO
 
-(defun image-from-pixel-list (width height pixels)
-  (print pixels))
-
 (defun pixelsort (image path-generator span-selector sorting-algo)
   (let* ((w (image-width image))
 	 (h (image-height image))
@@ -137,26 +132,18 @@
     (mapcar (lambda (s) (sort-pixel-span sorting-algo (image-pixels new-image) (first s) (second s) ))
 	    (mapcar (lambda (path) (select-spans span-selector pixels path)) ; Returns multiple lists of pixels
 		    paths))
-    new-image)) ; returns lists of indices
+    new-image))
 
 
 ;;; Main code ;;;
 
-
-(defparameter *image* (read-image "pixeltest.png"))
+(defparameter *image* (read-image "./barbican-london-1.jpg"))
 
 (let* ((sorted (pixelsort *image*
 			  (make-instance 'line-path)
 			  (make-instance 'span-selector)
 			  (make-instance 'sorting-algo :sort-by 'hue))))
-       ;(sorted-img (image-from-pixel-list (image-width *image*) (image-height *image*) sorted)))
-  (imago:write-image sorted "out.png"))
-  ; ())
-
-; (imago:write-image *image* "out.png")
-; (let ((w (imago:image-height *image*)) 
-;       (h (imago:image-width *image*)))
-;   (format t "~ax~a" w h))
+  (imago:write-image sorted "out.jpg"))
 
 (format t "~a~%" (aref (imago:image-pixels *image*) 1 1))
 (imago:color-green (aref (imago:image-pixels *image*) 1 1))
