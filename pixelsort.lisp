@@ -91,7 +91,7 @@
 		 (span-break (list (get-pixel-value (nth i path))))) ; Include the pixel in the next span
 		(t (push (get-pixel-value (nth i path)) current-span)))))
       (span-break)
-      (format t "Selected spans: ~a~%" spans)
+      ; (format t "Selected spans: ~a~%" spans)
       spans)))
 
 
@@ -126,15 +126,20 @@
   (:DOCUMENTATION "Sorts the values and puts then back at their coordinates into the provided image. There must be a better way, please"))
 
 (defmethod sort-pixel-span :around ((algo sorting-algo) image span)
-  (let ((sorted-values (call-next-method)))
-    (loop for ((x . y) . val) in sorted-values do
-	  (format t ">> ~a ~a ~a~%" x y val)
-	  (setf (aref image x y) val))))
+  ;; Some more ugly around magic. Split the spans ( ((x.y) val) ((x.y) val) ...) into coords and vals
+  ;; Then sort the vals and set them to the coords in the image
+  (let* ((coords (mapcar 'car span))
+	 (sorted-values (call-next-method)))
+    (dotimes (i (length coords))
+      (let ((val (nth i sorted-values)))
+	(destructuring-bind (x . y) (nth i coords)
+	  (setf (aref image x y ) val))))))
 
 (defmethod sort-pixel-span ((algo sorting-algo) image span)
-  (if (> 2 (length span))
-      (sort span (lambda (a b) (< (cdr a) (cdr b))))
-      span))
+  (let* ((vals (mapcar 'cdr span)))
+    (if (< 2 (length vals))
+	(sort vals (lambda (a b) (< a b)))
+	vals)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;
@@ -156,8 +161,7 @@
 	 (pixels (image-pixels image))
 	 (paths (generate-path path-generator w h))
 	 (new-image (imago:make-rgb-image w h)))
-    (format t "Sorting the path ~a~%" paths)
-    (mapcar (lambda (s) (format t "Sorting span: ~a~%" s) (sort-pixel-span sorting-algo (image-pixels new-image) s))
+    (mapcar (lambda (s) (sort-pixel-span sorting-algo (image-pixels new-image) s))
 	    (flatten-one-level
 	      (mapcar (lambda (path) (select-spans span-selector pixels path)) ; Returns a lists of spans for each path
 		      paths)))
@@ -192,15 +196,15 @@
 ;;; Main code ;;;
 
 ; (defparameter *image* (read-image "./barbican-london-1.jpg"))
-(defparameter *image* (read-image "pixeltest.png"))
+(defparameter *image* (read-image "./barbican-london-1.jpg"))
 
 (let* ((sorted (pixelsort *image*
 			  (make-instance 'line-path)
 			  (make-instance 'span-selector-plus)
 			  (make-instance 'sorting-algo :sort-by 'hue))))
-  (imago:write-image sorted "out.png"))
+  (imago:write-image sorted "out.jpg"))
 
-(format t "~a~%" (aref (imago:image-pixels *image*) 1 1))
+(format t "Sorted ~a~%" (aref (imago:image-pixels *image*) 1 1))
 (imago:color-green (aref (imago:image-pixels *image*) 1 1))
 
 ; (loop for px in  (imago:image-pixels *image*) do
