@@ -1,6 +1,7 @@
 (load "~/quicklisp/setup.lisp")
 (ql:quickload :imago)
-(ql:quickload "local-time")
+(ql:quickload :local-time)
+(ql:quickload :clingon)
 (use-package 'imago)
 
 ; No idea
@@ -11,20 +12,12 @@
 (load "path-generator")
 (load "span-selector")
 (load "sorter")
-
-;; Helper function, written by the computer
-(defun flatten-one-level (lst)
-  (cond
-    ((null lst) nil)  ; Base case: if the list is empty, return nil
-    ((listp (car lst))  ; If the first element is a list
-     (append (car lst) (flatten-one-level (cdr lst))))  ; Append the first element (flattened) with the rest
-    (t (cons (car lst) (flatten-one-level (cdr lst))))))  ; Otherwise, keep the current element and process the rest
+(load "helper")
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;; pixelsort method ;;
 ;;;;;;;;;;;;;;;;;;;;;;
-
-; (in-package :pixelsortery) 
+;; (in-package :pixelsortery)  ; ?
 (defun pixelsort (image path-generator span-selector sorting-algo)
   (let* ((w (image-width image))
 	 (h (image-height image))
@@ -42,45 +35,67 @@
 ;;; Main code ;;;
 ;;;;;;;;;;;;;;;;;
 
-(defun timestamp-diff (start end)
-  (if (local-time:timestamp< end start)
-      (timestamp-diff end start)
-      (local-time:with-decoded-timestamp (:nsec nsec :sec sec :minute min :hour hour :day day :month month :year year) start
-	(local-time:adjust-timestamp end
-	  (offset :nsec (- nsec))
-	  (offset :sec (- sec))
-	  (offset :minute (- min))
-	  (offset :hour (- hour))
-	  ; (offset :day (- 1 day))
-	  ; (offset :month (- 1 month))
-	  ; (offset :year (- 1 year))
-	  ))))
-(defun as-duration-string (timestamp)
-  (local-time:format-timestring
-    nil
-    timestamp
-    :format '((:min 2) ":" (:sec 2) "." :nsec)))
+(defun cmdline/handler (cmd)
+  (let* ((args (clingon:command-arguments cmd))
+	(infile (clingon:getopt cmd :input-file))
+	(outfile (clingon:getopt cmd :output-file))
+	(first-arg (nth 0 args))
+	(second-arg (nth 1 args)))
+    ; (format t "~a | ~a ~a ~a ~a ~%" args first-arg second-arg infile outfile)
+    ;; use the first two args as infile and outfile
+    (if (< 2 (count nil (list first-arg second-arg infile outfile)))
+	(error 'arg-error "You need to provide a input and an output file")
+	(progn 
+	  (setq outfile (or outfile second-arg first-arg))
+	  (setq infile  (or infile first-arg))))
 
-(defparameter *image-path* "./images/barbican-london.jpg")
-(defparameter *out-path* "out.jpg")
+    (let* ((start-time (local-time:now))
+	   (image (read-image infile))
+	   (end-time (local-time:now)))
+      (format t "Image loaded in ~a~%" (as-duration-string (timestamp-diff start-time end-time)))
+      (let* ((sort-start (local-time:now))
+	     (sorted (pixelsort image
+		      (make-instance 'line-path)
+		      (make-instance 'limit-mark-selector :max 300)
+		      (make-instance 'sorting-algo :sort-by 'hue)))
+	     (sort-end (local-time:now)))
+	(imago:write-image sorted outfile)
+	(let* ((write-end (local-time:now))
+	       (full-time (timestamp-diff sort-end sort-start))
+	       (write-time (timestamp-diff write-end sort-end)))
+	  (format t "Sorted ~a pixels in ~a (~a to write).~%"
+		  (array-total-size (imago:image-pixels image))
+		  (as-duration-string full-time)
+		  (as-duration-string write-time)))))))
 
-(let* ((start-time (local-time:now))
-       (image (read-image *image-path*))
-       (end-time (local-time:now)))
-  (format t "Image loaded in ~a~%" (as-duration-string (timestamp-diff start-time end-time)))
-  (let* ((sort-start (local-time:now))
-	 (sorted (pixelsort image
-		  (make-instance 'line-path)
-		  (make-instance 'limit-mark-selector :max 300)
-		  (make-instance 'sorting-algo :sort-by 'hue)))
-	 (sort-end (local-time:now)))
-    (imago:write-image sorted *out-path*)
-    (let* ((write-end (local-time:now))
-	   (full-time (timestamp-diff sort-end sort-start))
-	   (write-time (timestamp-diff write-end sort-end)))
-      (format t "Sorted ~a pixels in ~a (~a to write).~%"
-	      (array-total-size (imago:image-pixels image))
-	      (as-duration-string full-time)
-	      (as-duration-string write-time)))))
+(defun cmdline/options ()
+  "Creates command line options"
+  (list
+    (clingon:make-option
+      :string
+      :description "input file"
+      :short-name #\i
+      :long-name "input"
+      :key :input-file)
+    (clingon:make-option
+      :string
+      :description "output file"
+      :short-name #\o
+      :long-name "output"
+      ;; :initial-value "out.png"  ; We need to solve imago being able to convert images
+      :key :output-file)))
 
+(defun main ()
+  (clingon:run
+    (clingon:make-command
+      :name "pixelsorterisp"
+      :description "A modular pixelsorter"
+      :version "0.1.0"
+      :license ""
+      :authors '("Lxtharia")
+      :options (cmdline/options)
+      :usage "-i <FILE> [-o <FILE>]"
+      :handler #'cmdline/handler
+      )))
 
+(main)
