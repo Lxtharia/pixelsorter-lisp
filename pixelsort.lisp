@@ -61,19 +61,20 @@
     timestamp
     :format '((:min 2) ":" (:sec 2) "." :nsec)))
 
-(defparameter *image-path* "./pixeltest.png")
+(defparameter *image-path* "./images/barbican-london.jpg")
+(defparameter *out-path* "out.jpg")
+
 (let* ((start-time (local-time:now))
        (image (read-image *image-path*))
        (end-time (local-time:now)))
   (format t "Image loaded in ~a~%" (as-duration-string (timestamp-diff start-time end-time)))
-
   (let* ((sort-start (local-time:now))
 	 (sorted (pixelsort image
 		  (make-instance 'line-path)
 		  (make-instance 'limit-mark-selector :max 300)
 		  (make-instance 'sorting-algo :sort-by 'hue)))
 	 (sort-end (local-time:now)))
-    (imago:write-image sorted "out.png")
+    (imago:write-image sorted *out-path*)
     (let* ((write-end (local-time:now))
 	   (full-time (timestamp-diff sort-end sort-start))
 	   (write-time (timestamp-diff write-end sort-end)))
