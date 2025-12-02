@@ -1,5 +1,6 @@
 (load "~/quicklisp/setup.lisp")
 (ql:quickload :imago)
+(ql:quickload "local-time")
 (use-package 'imago)
 
 ; No idea
@@ -41,14 +42,44 @@
 ;;; Main code ;;;
 ;;;;;;;;;;;;;;;;;
 
-(defparameter *image* (read-image "./barbican-london-1.jpg"))
+(defun timestamp-diff (start end)
+  (if (local-time:timestamp< end start)
+      (timestamp-diff end start)
+      (local-time:with-decoded-timestamp (:nsec nsec :sec sec :minute min :hour hour :day day :month month :year year) start
+	(local-time:adjust-timestamp end
+	  (offset :nsec (- nsec))
+	  (offset :sec (- sec))
+	  (offset :minute (- min))
+	  (offset :hour (- hour))
+	  ; (offset :day (- 1 day))
+	  ; (offset :month (- 1 month))
+	  ; (offset :year (- 1 year))
+	  ))))
+(defun as-duration-string (timestamp)
+  (local-time:format-timestring
+    nil
+    timestamp
+    :format '((:min 2) ":" (:sec 2) "." :nsec)))
 
-(let* ((sorted (pixelsort *image*
-			  (make-instance 'line-path)
-			  (make-instance 'limit-mark-selector :max 300)
-			  (make-instance 'sorting-algo :sort-by 'hue))))
-  (imago:write-image sorted "out.jpg"))
+(defparameter *image-path* "./pixeltest.png")
+(let* ((start-time (local-time:now))
+       (image (read-image *image-path*))
+       (end-time (local-time:now)))
+  (format t "Image loaded in ~a~%" (as-duration-string (timestamp-diff start-time end-time)))
 
-(format t "Sorted ~a pixels.~%" (array-total-size (imago:image-pixels *image*)))
+  (let* ((sort-start (local-time:now))
+	 (sorted (pixelsort image
+		  (make-instance 'line-path)
+		  (make-instance 'limit-mark-selector :max 300)
+		  (make-instance 'sorting-algo :sort-by 'hue)))
+	 (sort-end (local-time:now)))
+    (imago:write-image sorted "out.png")
+    (let* ((write-end (local-time:now))
+	   (full-time (timestamp-diff sort-end sort-start))
+	   (write-time (timestamp-diff write-end sort-end)))
+      (format t "Sorted ~a pixels in ~a (~a to write).~%"
+	      (array-total-size (imago:image-pixels image))
+	      (as-duration-string full-time)
+	      (as-duration-string write-time)))))
 
 
