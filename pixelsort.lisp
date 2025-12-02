@@ -75,23 +75,23 @@
 		 (span-break (list (get-pixel-value (nth i path))))) ; Include the pixel in the next span
 		(t (push (get-pixel-value (nth i path)) current-span)))))
       (span-break)
-      (format t "Marks ~a~%" (first marked-path))
+      ; (format t "Marks ~a~%" marked-path)
       spans)))
 
-;; TODO: this is called on limit-mark-selector instance
 ;; All-selector
 (defmethod select-spans ((selector span-mark-selector) pixels path)
-  ;; Mark everything as good (3)
+  ;; Mark everything as good (2)
   (loop for _ in path collect
-	3))
+	2))
 
 ;; Limit selector
-(defclass limit-mark-selector (span-mark-selector) ())
-(defmethod select-span ((selector limit-mark-selector) pixels path)
-  (loop for _ in path collect
-	0))
-	;  (loop for i from 0 below (length path)
-	; collect (if (= 0 (% i 50)) 1 0)))
+(defclass limit-mark-selector (span-mark-selector)
+  ((max-len :initarg :max :accessor get-max-len)
+   (random-minimum :initarg :random-min)))
+
+(defmethod select-spans ((selector limit-mark-selector) pixels path)
+  (loop for i from 0 below (length path)
+	collect (if (= 0 (mod i (get-max-len selector))) 1 3)))
 
 
 ;;
@@ -101,7 +101,7 @@
 ;;
 
 (defclass limit-selector (span-selector)
-  ((max-len :initarg :max)
+  ((max-len :initarg :max :accessor get-max-len)
    (random-minimum :initarg :random-min)))
 
 (defclass threshold-selector (span-selector)
@@ -133,7 +133,7 @@
 
 (defmethod select-spans :around ((selector limit-selector) pixels path)
   (let ((spans (call-next-method))
-	(len 3))
+	(len (get-max-len selector)))
     (loop for i from (length spans) downto 0 by len
 	  collect (subseq spans i (+ i len))))) ;; Remove the first element. Placeholder for splitting spans above the limits
 
@@ -218,8 +218,8 @@
 ; (test (make-instance 'threshold-selector ))
 ; (test (make-instance 'limit-selector))
 ; (test (make-instance 'limited-threshold-selector ))
-(test (make-instance 'span-mark-selector))
-(test (make-instance 'limit-mark-selector))
+; (test (make-instance 'span-mark-selector))
+; (test (make-instance 'limit-mark-selector))
 
 
 ;;; Main code ;;;
@@ -229,7 +229,7 @@
 
 (let* ((sorted (pixelsort *image*
 			  (make-instance 'line-path)
-			  (make-instance 'limit-mark-selector)
+			  (make-instance 'limit-mark-selector :max 300)
 			  (make-instance 'sorting-algo :sort-by 'hue))))
   (imago:write-image sorted "out.jpg"))
 
